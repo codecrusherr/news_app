@@ -1,16 +1,16 @@
-import nltk
 import requests
+import nltk
 import streamlit as st
 import pandas as pd
 from nltk import word_tokenize
 from nltk.probability import FreqDist
 from nltk.corpus import stopwords
-import json
-from wordcloud import WordCloud
 import matplotlib.pyplot as plt
 import main_functions
 import plotly.express as px
 from wordcloud import WordCloud
+
+nltk.download('punkt')
 
 # Set up your Streamlit page
 st.set_page_config(
@@ -26,29 +26,27 @@ st.set_page_config(
 )
 
 stop_words = set(stopwords.words("english"))
+
 st.title("Project 1 - News App")
 
 
 # Load API key
 def load_api_key():
-    with open("JSON_Files/api_key.json") as file:
-        return json.load(file)["my_key"]
+    api_data = main_functions.read_from_file("JSON_Files/api_key.json")
+    return api_data["my_key"]
 
-
-api_key = load_api_key()
 
 app_page = st.sidebar.selectbox("Select an API",
-                                ["Top Stories", "Most Popular Articles"])
+                                ["", "Top Stories", "Most Popular Articles"])
 
 
 # Function to fetch data from the NYT API
-def fetch_nyt_data(topic):
-    url = f"https://api.nytimes.com/svc/topstories/v2/{topic}.json?api-key={api_key}"
+def fetch_nyt_data(section):
+    api_key = load_api_key()  # Ensure the API key is loaded right where it's needed
+    url = f"https://api.nytimes.com/svc/topstories/v2/{section}.json?api-key={api_key}"
     response = requests.get(url)
     if response.status_code == 200:
-        articles_data = response.json()['results']
-        text_data = " ".join([article['title'] + ' ' + article['abstract'] for article in articles_data])
-        return text_data
+        return " ".join(article['title'] + ' ' + article['abstract'] for article in response.json()['results'])
     else:
         st.error("Error fetching data from the NYT API")
         return ""
@@ -57,7 +55,7 @@ def fetch_nyt_data(topic):
 # Function to generate word cloud
 def generate_word_cloud(text_wordcloud, max_words, background_color, colormap):
     user_wordcloud = WordCloud(width=800,
-                               height=400,
+                               height=800,
                                stopwords=stop_words,
                                max_words=max_words,
                                background_color=background_color,
@@ -88,13 +86,44 @@ if app_page == "Top Stories":
         col1, col2 = st.columns(2)
 
         with col1:
-            max_words_wordcloud = st.slider("Max words in WordCloud", 1, 200, 50)
+            max_words_wordcloud = st.slider("Max words in WordCloud", 1, 200, 100)
             colormap_wordcloud = st.selectbox("Colormap",
-                                              ["prism", "viridis", "plasma", "magma", "cividis", "cool", "spring", ])
-            background_color_wordcloud = st.color_picker("Background Color", "#FFFFFF")
+                                              ["prism", "viridis", "plasma", "magma", "cividis", "cool", "spring",
+                                               "autumn", "summer", "winter"])
+            background_color_wordcloud = st.color_picker("Background Color", "#000000")
 
         with col2:
             generate_word_cloud(text_for_wordcloud, max_words_wordcloud, background_color_wordcloud, colormap_wordcloud)
 
-st.subheader("II - Frequency Distribution")
-frequency_plot = st.checkbox("Click here to display the frequency distribution plot")
+        # Frequency Distribution Plot
+        st.subheader("II - Frequency Distribution")
+        if st.checkbox("Click here to display the frequency distribution plot"):
+            if text_for_wordcloud:
+                num_words = st.slider("How many words do you want to see in the plot?", 1, 20, 10)
+
+                words = word_tokenize(text_for_wordcloud.lower())
+
+                no_punkt = []
+                for w in words:
+                    if w.isalpha():
+                        no_punkt.append(w)
+
+                # Load list of stopwords
+                stopwordsEnglish = stopwords.words("english")
+
+                filtered_list = []
+                for w in no_punkt:
+                    if w not in stopwordsEnglish:
+                        filtered_list.append(w)
+
+                freq_dist = FreqDist(filtered_list)
+                # Fetch the most common words up to the number specified by the user
+                most_common_words = freq_dist.most_common(num_words)
+
+                df_freq_dist = pd.DataFrame(most_common_words, columns=['words', 'count'])
+                freq_fig = px.bar(df_freq_dist, x='words', y='count', color="count")
+                freq_fig.update_layout(yaxis_title="sum of count")
+                st.plotly_chart(freq_fig)
+
+
+
