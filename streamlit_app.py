@@ -125,5 +125,72 @@ if app_page == "Top Stories":
                 freq_fig.update_layout(yaxis_title="sum of count")
                 st.plotly_chart(freq_fig)
 
+# Part B: Most Popular Articles API
+if app_page == "Most Popular Articles":
+    st.subheader("The Most Popular Articles")
+    st.subheader("I - Comparing Most Shared, Viewed and Emailed Articles")
+    # User inputs for article type and period
+    article_type = st.selectbox("Select the type of articles",
+                                ["", "emailed", "shared", "viewed"])
+    period = st.selectbox("Select the period",
+                          ["", "1", "7", "30"])
 
+    # Fetch data from the NYT Most Popular Articles API
+    if article_type and period:
+        article_api_key = load_api_key()
+        api_url = f"https://api.nytimes.com/svc/mostpopular/v2/{article_type}/{period}.json?api-key={article_api_key}"
+        response = requests.get(api_url)
+
+        if response.status_code == 200:
+            articles_data = response.json()['results']
+            text_for_wordcloud = " ".join(
+                article['title'] + ' ' + (article.get('abstract', '') or '') for article in articles_data)
+
+            # Configuration and generation of word cloud
+            col1, col2 = st.columns(2)
+            with col1:
+                max_words_wordcloud = st.slider("Max words in WordCloud", 1, 200, 100)
+                colormap_wordcloud = st.selectbox("Colormap",
+                                                  ["prism", "viridis", "plasma", "magma", "cividis", "cool", "spring",
+                                                   "autumn", "summer", "winter"],
+                                                  key='mp_colormap')
+                background_color_wordcloud = st.color_picker("Background Color", "#000000")
+
+            with col2:
+                # Generate and display the word cloud for Most Popular Articles
+                generate_word_cloud(text_for_wordcloud, max_words_wordcloud, background_color_wordcloud,
+                                    colormap_wordcloud)
+
+            # Frequency Distribution Plot
+            st.subheader("II - Frequency Distribution")
+            if st.checkbox("Click here to display the frequency distribution plot"):
+                if text_for_wordcloud:
+                    num_words = st.slider("How many words do you want to see in the plot?", 1, 20, 10)
+
+                    words = word_tokenize(text_for_wordcloud.lower())
+
+                    no_punkt = []
+                    for w in words:
+                        if w.isalpha():
+                            no_punkt.append(w)
+
+                    # Load list of stopwords
+                    stopwordsEnglish = stopwords.words("english")
+
+                    filtered_list = []
+                    for w in no_punkt:
+                        if w not in stopwordsEnglish:
+                            filtered_list.append(w)
+
+                    freq_dist = FreqDist(filtered_list)
+                    # Fetch the most common words up to the number specified by the user
+                    most_common_words = freq_dist.most_common(num_words)
+
+                    df_freq_dist = pd.DataFrame(most_common_words, columns=['words', 'count'])
+                    freq_fig = px.bar(df_freq_dist, x='words', y='count', color="count")
+                    freq_fig.update_layout(yaxis_title="sum of count")
+                    st.plotly_chart(freq_fig)
+
+        else:
+            st.error("Error fetching data from the NYT Most Popular Articles API")
 
